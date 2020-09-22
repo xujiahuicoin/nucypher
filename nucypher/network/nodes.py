@@ -21,7 +21,7 @@ import time
 from collections import defaultdict, deque
 from contextlib import suppress
 from queue import Queue
-from typing import Iterable
+from typing import Iterable, List
 from typing import Set, Tuple, Union
 
 import maya
@@ -344,14 +344,22 @@ class Learner:
 
         return discovered
 
-    def read_nodes_from_storage(self) -> None:
+    def read_nodes_from_storage(self) -> List:
         stored_nodes = self.node_storage.all(federated_only=self.federated_only)  # TODO: #466
 
         restored_from_disk = []
-
+        invalid_nodes = defaultdict(list)
         for node in stored_nodes:
+            node_domain = node.domain.decode('utf-8')
+            if node_domain != self.learning_domain:
+                invalid_nodes[node_domain].append(node)
+                continue
             restored_node = self.remember_node(node, record_fleet_state=False)  # TODO: Validity status 1866
             restored_from_disk.append(restored_node)
+
+        if invalid_nodes:
+            self.log.warn(f"We're learning about domain '{self.learning_domain}', but found nodes from other domains; "
+                          f"let's ignore them. These domains and nodes are: {dict(invalid_nodes)}")
 
         return restored_from_disk
 
